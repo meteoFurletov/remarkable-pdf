@@ -354,26 +354,49 @@ def chrome_print(chrome, html_path, pdf_path, budget_ms):
                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def add_bookmarks(pypdf, src, dst, outline):
-    reader = pypdf.PdfReader(src)
+def _page_texts(src, reader, npages):
+    """Per-page text for locating heading tokens. Prefer poppler's `pdftotext` (C — far
+    faster than pypdf's pure-Python extraction, the slowest part on big docs); fall back to
+    pypdf if it isn't installed or the page count doesn't line up."""
+    exe = shutil.which("pdftotext")
+    if exe:
+        try:
+            out = subprocess.run([exe, "-q", "-enc", "UTF-8", src, "-"],
+                                 capture_output=True, encoding="utf-8", errors="replace",
+                                 timeout=180).stdout
+            parts = out.split("\f")
+            if parts and parts[-1] == "":
+                parts.pop()
+            if len(parts) == npages:
+                return parts
+        except Exception:
+            pass
     texts = []
     for pg in reader.pages:
         try:
             texts.append(pg.extract_text() or "")
         except Exception:
             texts.append("")
+    return texts
 
-    def page_of(tok):
-        for i, t in enumerate(texts):
-            if tok in t:
+
+def add_bookmarks(pypdf, src, dst, outline):
+    reader = pypdf.PdfReader(src)
+    npages = len(reader.pages)
+    texts = _page_texts(src, reader, npages)
+
+    def page_from(tok, start):
+        for i in range(start, npages):
+            if tok in texts[i]:
                 return i
         return None
 
-    writer = pypdf.PdfWriter()
-    writer.append(reader)
+    writer = pypdf.PdfWriter(clone_from=reader)   # cheap clone, not a page-by-page append
     parents, last, missing = {}, 0, 0
     for level, label, tok in outline:
-        pg = page_of(tok)
+        pg = page_from(tok, last)                  # headings are in order → pages non-decreasing
+        if pg is None:
+            pg = page_from(tok, 0)                 # …but be safe if a token sits earlier
         if pg is None:
             pg, missing = last, missing + 1
         else:

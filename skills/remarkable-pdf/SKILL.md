@@ -66,12 +66,12 @@ is blocked; a Chromium-family browser (`google-chrome`/`chromium`/`edge`) must b
 **Set a generous command timeout.** Render time is real work, not the Chrome
 `--virtual-time-budget` (which is just a safety ceiling — the CPU-bound render finishes
 regardless of it). Two costs dominate and grow with document size: (1) Chrome rendering and
-rasterising the PDF, and (2) the bookmark pass, where pypdf scans **every page's text** to
-place the outline (≈ tens of ms/page; on a 296-page doc it roughly doubled the wall time).
-Big docs (many hundreds of pages) can take minutes on a slow machine — so give the Bash call
-a high timeout, the maximum (`timeout: 600000` ms) when unsure. A truncated/empty PDF means
-the terminal killed it mid-work: re-run with a higher timeout, or pass `--bookmark-depth 0`
-to skip the (slowest) bookmark scan.
+rasterising the PDF, and (2) the bookmark pass, which scans **every page's text** to place the
+outline (uses poppler's `pdftotext` when available — much faster — otherwise pypdf). Big docs
+(many hundreds of pages) can still take a while on a slow machine — so give the Bash call a
+high timeout, the maximum (`timeout: 600000` ms) when unsure. A truncated/empty PDF means the
+terminal killed it mid-work: re-run with a higher timeout, or pass `--bookmark-depth 0` to
+skip the bookmark scan entirely.
 
 ## The reMarkable layout rules (what makes it read well)
 
