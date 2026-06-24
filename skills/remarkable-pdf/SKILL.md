@@ -1,14 +1,14 @@
 ---
 name: remarkable-pdf
-description: Guidelines for producing clean, readable PDFs laid out for the reMarkable Paper Pro (e-ink) — device-correct page geometry, e-ink typography, KaTeX math, and heading bookmarks. Use whenever a project needs to generate a reMarkable / e-reader–friendly PDF from Markdown or HTML, or asks about reMarkable page size, margins, fonts, math rendering, or bookmarks. Pure guidance — apply it with the project's own tooling.
+description: Guidelines for producing clean, readable PDFs laid out for the reMarkable Paper Pro (e-ink) — device-correct page geometry, e-ink typography, KaTeX math, and heading bookmarks. Covers two render engines (WeasyPrint and headless Chrome) and when to use each. Use whenever a project needs to generate a reMarkable / e-reader–friendly PDF from Markdown or HTML, or asks about reMarkable page size, margins, fonts, math, or bookmarks. Pure guidance — apply it with the project's own tooling.
 ---
 
 # Making a good PDF for the reMarkable Paper Pro
 
 This is a **guidelines** skill — knowledge, not a program. It tells you how to lay out and
 render a PDF that reads well on the reMarkable Paper Pro e-ink screen. Apply it with whatever
-the host project already uses (a headless browser, a Markdown/HTML pipeline, a templating
-layer). The reference recipe near the end is the canonical way; adapt it to the stack.
+the host project already uses. The page geometry, typography, math, and bookmark *rules* are
+engine-independent; pick an engine in **Rendering** below.
 
 ## First — ask the user for the look
 
@@ -36,63 +36,80 @@ said, ask and offer these defaults (all optional):
 - **Justify with hyphenation** for an even greyscale block.
 - **Keep blocks whole.** Set `page-break-inside: avoid` on tables, code blocks, and display
   equations so they never split across a page break.
-- **Clear headings** — they become the navigation outline (below).
+- **Use real `<h1>`–`<h6>` headings** — they become the navigation outline (below), and on
+  WeasyPrint they generate bookmarks automatically. If you clean/scrape HTML, keep them as `hN`.
 
 ## Math — use KaTeX, not MathJax-SVG
 
 Write `$…$` (inline) and `$$…$$` (display) and render with **KaTeX**. KaTeX gives true LaTeX
 weight; MathJax's SVG output prints visibly **heavier/bold** and looks wrong next to body text.
-Stick to KaTeX-supported LaTeX (a large subset); render unsupported macros in red rather than
-failing the build (`throwOnError:false`).
+Render unsupported macros in red rather than failing the build (`throwOnError:false`). *How* you
+invoke KaTeX depends on the engine (see Rendering).
 
 ## Bookmarks (navigation matters on e-ink)
 
 E-ink has no fast scroll, so a tap-to-navigate outline is essential. Build a **nested PDF
-outline from the heading hierarchy** (H1 → H2 → H3 …). Keep headings meaningful.
+outline from the heading hierarchy** (H1 → H2 → H3 …). WeasyPrint does this for free; with
+Chrome you add it as a post-process (see Rendering).
 
-## Reference render recipe
+## Rendering — pick an engine
 
-Canonical pipeline (swap any stage for the project's own tools):
+The rules above are identical either way; only the engine differs.
 
-1. Content (Markdown/HTML) → an HTML body. (For Markdown, a parser like `marked`; protect
-   `$…$`/`$$…$$` from the parser, and **HTML-escape math text** so `<`, `>`, `&` inside
-   formulas don't break the DOM.)
-2. Wrap it in an HTML document with the reMarkable CSS and KaTeX.
-3. Print to PDF with headless Chrome.
-4. Add the heading→page bookmark outline.
+| | **WeasyPrint** (pure Python) | **Headless Chrome** (`print-to-pdf`) |
+|---|---|---|
+| Speed | **seconds** | slower; a browser cold-start (esp. **snap/flatpak Chrome**) can take minutes |
+| Robustness | no browser → none of the Chrome gotchas below | hits the keyring/TTY + sandbox gotchas |
+| Math | no JS → **pre-render KaTeX to HTML first** | runs JS → **KaTeX auto-renders in-page** |
+| Bookmarks | **automatic from `<h1>`–`<h6>`** | add as a post-process (e.g. `pypdf`) |
+| Page size / CSS | ✅ excellent `@page` support | ✅ |
+| Install | `pip install weasyprint` (+ Pango/cairo libs) | a Chromium-family browser |
 
-**CSS essentials** (substitute `«accent»`, `«font»`):
+**Rule of thumb: default to WeasyPrint** — it's fast and sidesteps the whole class of headless-
+Chrome problems. Reach for **Chrome** when the content genuinely needs a JS engine (live KaTeX
+without a pre-render step, or JS-driven content).
+
+**Shared CSS essentials** (both engines; substitute `«accent»`, `«font»`):
 
 ```css
 @page { size: 179.6mm 239.6mm; margin: 13mm 12mm 15mm; }
 body  { font: 11.5pt/1.55 «font»; color:#111418; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 h1 { font-size:1.5em; padding-bottom:5pt; border-bottom:1.5pt solid «accent»; page-break-after:avoid; }
 h2 { font-size:1.22em; padding-left:7pt; border-left:3pt solid «accent»; page-break-after:avoid; }
-p  { margin:0 0 7pt; text-align:justify; hyphens:auto; -webkit-hyphens:auto; }
+p  { margin:0 0 7pt; text-align:justify; hyphens:auto; }
 table, pre, .katex-display { page-break-inside:avoid; }
 .katex { font-size:1.05em; }
 ```
 
-**KaTeX in the page** (vendor the files locally for offline, repeatable builds — loading from a
-CDN can lose a race with the print timer and leave raw `$…$`):
+### Option A — WeasyPrint (fast, no browser)
+
+```python
+from weasyprint import HTML
+HTML(string=full_html, base_url=".").write_pdf("out.pdf")  # @page sets the reMarkable size
+```
+
+- **Bookmarks are automatic** from `<h1>`–`<h6>`; fine-tune with CSS `bookmark-level` /
+  `bookmark-label` if needed.
+- **Math:** WeasyPrint runs no JavaScript, so KaTeX's auto-render won't fire. Pre-render it —
+  run KaTeX server-side (`katex.renderToString` via Node, or a Python KaTeX binding) to convert
+  each `$…$` into static KaTeX HTML, include `katex.min.css` + its fonts, then pass that HTML to
+  WeasyPrint. (No pre-render → no math. MathJax/MathML aren't options here.) Expect minor KaTeX
+  layout quirks vs a browser; acceptable for most docs.
+- Fonts come from the system (fontconfig) or `@font-face` with local files (`base_url` resolves
+  relative paths).
+
+### Option B — headless Chrome (full JS fidelity)
+
+Load KaTeX in the page, let it auto-render, then print:
 
 ```html
 <link rel="stylesheet" href="katex/katex.min.css">
 <script defer src="katex/katex.min.js"></script>
 <script defer src="katex/contrib/auto-render.min.js"></script>
-<script>
-  addEventListener('load', () => {
-    renderMathInElement(document.body, {
-      delimiters: [{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},
-                   {left:'\\[',right:'\\]',display:true},{left:'\\(',right:'\\)',display:false}],
-      throwOnError: false
-    });
-    document.fonts.ready.then(() => { document.title = 'READY'; });  // fonts loaded before print
-  });
-</script>
+<script>addEventListener('load',()=>{renderMathInElement(document.body,{delimiters:[
+  {left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
+  document.fonts.ready.then(()=>document.title='READY');});</script>
 ```
-
-**Print with headless Chrome** (the flags matter — see Gotchas):
 
 ```bash
 google-chrome --headless=new --no-sandbox --disable-gpu \
@@ -103,10 +120,12 @@ google-chrome --headless=new --no-sandbox --disable-gpu \
   --print-to-pdf=out.pdf "file://$PWD/doc.html" < /dev/null
 ```
 
-**Bookmarks:** tag each heading with a unique, invisible marker (e.g. a tiny white
-`<span>token</span>`), render, then find which page each token lands on and write a nested
-outline. Poppler's `pdftotext` (split output on `\f` page breaks) is fast for the page scan;
-`pypdf` can both read pages and write the outline (`add_outline_item(title, page, parent=…)`).
+- Vendor KaTeX locally — a CDN load can lose the race with the print timer and leave raw `$…$`.
+- Protect `$…$`/`$$…$$` from any Markdown parser, and **HTML-escape math text** so `<`/`>`/`&`
+  inside formulas don't break the DOM.
+- **Bookmarks:** Chrome doesn't emit them. Tag each heading with an invisible unique marker,
+  render, find which page each marker lands on (poppler `pdftotext` is fast; `pypdf` also
+  works), then write a nested outline with `pypdf` `add_outline_item(title, page, parent=…)`.
 
 ## Verify the output
 
@@ -118,19 +137,17 @@ outline. Poppler's `pdftotext` (split output on `\f` page breaks) is fast for th
 ## Gotchas (hard-won)
 
 - **MathJax-SVG prints bold/heavy.** Use KaTeX. (Same math, much lighter glyphs.)
+- **snap/flatpak Chrome cold-starts in minutes.** If a headless render is mysteriously slow,
+  that's usually it — use a deb/system Chrome, or just switch to WeasyPrint.
 - **Headless Chrome hangs with `tcsetattr: Inappropriate ioctl for device`.** It's the OS
   keyring on startup: the secret service spawns `pinentry`, which grabs a TTY and blocks until
-  the timeout — looking like an endlessly slow render. Fix: `--password-store=basic
-  --use-mock-keychain` and run with **stdin detached** (`< /dev/null`).
+  the timeout. Fix: `--password-store=basic --use-mock-keychain` and **stdin detached**
+  (`< /dev/null`). WeasyPrint avoids this entirely.
 - **Low-DPI previews exaggerate weight.** Serif math looks "bold" below ~150 DPI; judge at
   ≥200 DPI or on-device (229 PPI). It is not actually bold.
-- **`--virtual-time-budget` is a safety ceiling, not the render time.** A CPU-bound render
-  prints when it signals done, regardless of the budget (a tiny budget renders the same doc
-  just as fast). Slowness comes from real work — Chrome rasterising a big doc and the
-  page-by-page bookmark scan — so give long renders a generous command timeout, don't shrink
-  the budget.
-- **`<`/`>`/`&` inside math break the DOM** if injected as raw HTML. HTML-escape math text;
-  the browser decodes it back to literals for KaTeX.
+- **`--virtual-time-budget` is a safety ceiling, not the render time.** A CPU-bound Chrome
+  render prints when it signals done, regardless of the budget. Slowness is real work, so give
+  long renders a generous command timeout — don't shrink the budget.
 
 ## Supported agents
 

@@ -28,7 +28,7 @@ npx skills add meteoFurletov/remarkable-pdf
 | Typography | Generous margins, high contrast, justified text; minimal accent (no backlight) |
 | Math | Use **KaTeX**, not MathJax-SVG (which prints heavier/bold); `$…$` / `$$…$$` |
 | Bookmarks | Build a nested PDF outline from the heading hierarchy (H1 → H2 → H3) |
-| Render recipe | Markdown/HTML → CSS + KaTeX → headless-Chrome `print-to-pdf` → outline |
+| Render | Two engines — **WeasyPrint** (fast, pure-Python, auto-bookmarks) or **headless Chrome** (full JS/KaTeX) — and when to use each |
 | Gotchas | The keyring/TTY hang, low-DPI "fake bold", `--virtual-time-budget` is a ceiling, escaping `<`/`>` in math |
 
 The chosen look (accent colour, font, size) is decided per use — the skill prompts for it.
