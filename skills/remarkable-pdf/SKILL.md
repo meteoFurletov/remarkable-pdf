@@ -63,6 +63,12 @@ before headings ≤ N; 0 = continuous flow). Other: `--bookmark-depth N` (defaul
 Run the Bash tool with the sandbox disabled (`dangerouslyDisableSandbox: true`) if Chrome
 is blocked; a Chromium-family browser (`google-chrome`/`chromium`/`edge`) must be on PATH.
 
+**Set a generous command timeout.** Big inputs render slowly. The script prints Chrome's
+render budget (≈1.2 s × blocks, capped at 300 s — e.g. ~157 s for a 131-block article). Give
+the Bash call a timeout **above that printed budget**; for anything non-trivial just use the
+maximum (`timeout: 600000` ms). If the terminal kills Chrome mid-render you get a truncated or
+empty PDF — that's a timeout, not a skill failure, so re-run with a higher timeout.
+
 ## The reMarkable layout rules (what makes it read well)
 
 These are the reusable PDF rules — they hold regardless of content:
