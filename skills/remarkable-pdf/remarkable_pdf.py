@@ -348,10 +348,17 @@ def build_html(blocks, title, style):
 def chrome_print(chrome, html_path, pdf_path, budget_ms):
     with tempfile.TemporaryDirectory() as prof:
         subprocess.run([chrome, "--headless=new", "--no-sandbox", "--disable-gpu",
+                        # Don't touch the OS keyring/secret-service: it spawns pinentry, which
+                        # grabs a TTY ("tcsetattr: Inappropriate ioctl for device") and hangs
+                        # headless until the timeout. Basic store + mock keychain avoid it.
+                        "--password-store=basic", "--use-mock-keychain",
+                        "--no-first-run", "--no-default-browser-check",
+                        "--disable-extensions", "--disable-dev-shm-usage",
                         "--no-pdf-header-footer", "--run-all-compositor-stages-before-draw",
                         f"--user-data-dir={prof}", f"--virtual-time-budget={budget_ms}",
                         f"--print-to-pdf={pdf_path}", f"file://{html_path}"],
-                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                       check=True, stdin=subprocess.DEVNULL,   # never wait on a TTY
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def _page_texts(src, reader, npages):

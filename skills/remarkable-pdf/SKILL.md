@@ -117,6 +117,11 @@ Then **rasterise a math page and look at it** (`pdftoppm -png -r 200 -f N -l N "
 
 ## Gotchas
 
+- **Chrome hangs / `tcsetattr: Inappropriate ioctl for device`** — headless Chrome on Linux
+  tries to unlock the OS keyring on startup; the secret-service spawns `pinentry`, which grabs
+  a TTY and hangs until the timeout (looks like an endlessly "slow" render). The script already
+  prevents this with `--password-store=basic --use-mock-keychain` and `stdin=DEVNULL`; keep
+  those if you adapt the Chrome invocation.
 - **Low-DPI previews exaggerate math weight** — serif math looks "bold" below ~150 DPI; judge
   at ≥200 DPI or on-device (229 PPI). It is not actually bold.
 - **KaTeX coverage** is a large LaTeX subset; unsupported macros render red rather than
