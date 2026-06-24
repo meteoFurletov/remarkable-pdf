@@ -63,11 +63,15 @@ before headings ≤ N; 0 = continuous flow). Other: `--bookmark-depth N` (defaul
 Run the Bash tool with the sandbox disabled (`dangerouslyDisableSandbox: true`) if Chrome
 is blocked; a Chromium-family browser (`google-chrome`/`chromium`/`edge`) must be on PATH.
 
-**Set a generous command timeout.** Big inputs render slowly. The script prints Chrome's
-render budget (≈1.2 s × blocks, capped at 300 s — e.g. ~157 s for a 131-block article). Give
-the Bash call a timeout **above that printed budget**; for anything non-trivial just use the
-maximum (`timeout: 600000` ms). If the terminal kills Chrome mid-render you get a truncated or
-empty PDF — that's a timeout, not a skill failure, so re-run with a higher timeout.
+**Set a generous command timeout.** Render time is real work, not the Chrome
+`--virtual-time-budget` (which is just a safety ceiling — the CPU-bound render finishes
+regardless of it). Two costs dominate and grow with document size: (1) Chrome rendering and
+rasterising the PDF, and (2) the bookmark pass, where pypdf scans **every page's text** to
+place the outline (≈ tens of ms/page; on a 296-page doc it roughly doubled the wall time).
+Big docs (many hundreds of pages) can take minutes on a slow machine — so give the Bash call
+a high timeout, the maximum (`timeout: 600000` ms) when unsure. A truncated/empty PDF means
+the terminal killed it mid-work: re-run with a higher timeout, or pass `--bookmark-depth 0`
+to skip the (slowest) bookmark scan.
 
 ## The reMarkable layout rules (what makes it read well)
 

@@ -449,8 +449,12 @@ def main():
             kept.write_text(html_doc, encoding="utf-8")
             print(f"   HTML: {kept}")
         raw = Path(td) / "raw.pdf"
-        budget = min(300000, max(30000, len(blocks) * 1200))
-        print(f"🖨️  Chrome ({budget // 1000}s)…")
+        # Safety ceiling only — NOT the render time. The render is CPU-bound, so Chrome's
+        # virtual clock stays frozen during it and the page prints when it signals done, not
+        # when this budget elapses (a 5 s budget renders the same doc just as fast). Wall time
+        # is the real render + bookmark work; that's what makes big docs slow, not this number.
+        budget = 120000
+        print(f"🖨️  Рендеринг (Chrome, лимит {budget // 1000} с)…")
         chrome_print(chrome, hp, raw, budget)
         if not raw.exists() or raw.stat().st_size == 0:
             die("Chrome не создал PDF.")
