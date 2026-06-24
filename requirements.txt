@@ -1,3 +1,0 @@
-# Optional — only needed for PDF bookmarks (the outline).
-# Rendering and math work without it; the script degrades to a no-bookmarks PDF.
-pypdf>=4
